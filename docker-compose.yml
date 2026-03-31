@@ -22,9 +22,12 @@ services:
 
   falkordb:
     image: falkordb/falkordb:latest
-    ports:
-      - "6379:6379"
     command: ["falkordb-server", "--port", "6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   chromadb:
     image: chromadb/chroma:latest
@@ -45,24 +48,25 @@ services:
       CLICKHOUSE_USER: default
       CLICKHOUSE_PASSWORD: password
 
-  langfuse:
-    image: langfuse/langfuse:latest
-    environment:
-      <<: *langfuse_env
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:password@postgres:5432/langfuse}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-your-secret-key}
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://clickhouse:8123}
-      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-password}
-      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-langfuse}
-    ports:
-      - "3000:3000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      clickhouse:
-        condition: service_started
+  # langfuse:  # Commented out - using cloud Langfuse
+  #   image: langfuse/langfuse:latest
+  #   environment:
+  #     <<: *langfuse_env
+  #     DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:password@postgres:5432/langfuse}
+  #     NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-your-secret-key}
+  #     NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+  #     CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://clickhouse:8123}
+  #     CLICKHOUSE_MIGRATION_URL: ${CLICKHOUSE_URL:-http://clickhouse:8123}
+  #     CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+  #     CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-password}
+  #     CLICKHOUSE_DB: ${CLICKHOUSE_DB:-langfuse}
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     clickhouse:
+  #       condition: service_started
 
   ollama:
     image: ollama/ollama:latest
@@ -100,11 +104,13 @@ services:
     ports:
       - "8001:8000"
     environment:
-      <<: *langfuse_env
+      LANGFUSE_HOST: https://cloud.langfuse.com
+      LANGFUSE_PUBLIC_KEY: pk-lf-e4e86629-2c3b-4963-bf2e-3aaf4e01939c
+      LANGFUSE_SECRET_KEY: sk-lf-5d3e278c-930d-4265-939d-84b7ef3cb8c6
       FALKORDB_HOST: falkordb
     depends_on:
-      - falkordb
-      - langfuse
+      falkordb:
+        condition: service_healthy
 
   startup_agent:
     build:
@@ -117,7 +123,6 @@ services:
       CHROMADB_HOST: chromadb
     depends_on:
       - chromadb
-      - langfuse
 
   conduct_agent:
     build:
@@ -130,7 +135,6 @@ services:
       CHROMADB_HOST: chromadb
     depends_on:
       - chromadb
-      - langfuse
 
   closeout_agent:
     build:
@@ -143,7 +147,6 @@ services:
       CHROMADB_HOST: chromadb
     depends_on:
       - chromadb
-      - langfuse
 
   regulatory_agent:
     build:
@@ -156,7 +159,7 @@ services:
       CHROMADB_HOST: chromadb
     depends_on:
       - chromadb
-      - langfuse
+
 
   analyst_agent:
     build:
@@ -169,7 +172,6 @@ services:
       CHROMADB_HOST: chromadb
     depends_on:
       - chromadb
-      - langfuse
 
   insights_agent:
     build:
@@ -182,7 +184,7 @@ services:
       CHROMADB_HOST: chromadb
     depends_on:
       - chromadb
-      - langfuse
+
 
   forecasting_agent:
     build:
@@ -195,7 +197,7 @@ services:
       CHROMADB_HOST: chromadb
     depends_on:
       - chromadb
-      - langfuse
+
 
   report_builder_agent:
     build:
@@ -208,7 +210,7 @@ services:
       CHROMADB_HOST: chromadb
     depends_on:
       - chromadb
-      - langfuse
+
 
   dashboard_creator_agent:
     build:
@@ -221,7 +223,6 @@ services:
       CHROMADB_HOST: chromadb
     depends_on:
       - chromadb
-      - langfuse
 
   etl_orchestrator_agent:
     build:
@@ -234,7 +235,7 @@ services:
       CHROMADB_HOST: chromadb
     depends_on:
       - chromadb
-      - langfuse
+
 
   data_profiler_agent:
     build:
@@ -247,7 +248,7 @@ services:
       CHROMADB_HOST: chromadb
     depends_on:
       - chromadb
-      - langfuse
+
 
   notifications_agent:
     build:
@@ -260,7 +261,6 @@ services:
       CHROMADB_HOST: chromadb
     depends_on:
       - chromadb
-      - langfuse
 
   mcp_tools:
     build:

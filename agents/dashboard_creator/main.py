@@ -22,26 +22,26 @@ def process_dashboard_creator(state_dict):
 
 @app.post('/process')
 async def process_state(state: A2AState):
-    trace = langfuse_wrapper.create_trace(name='dashboard_creator_agent', session_id=state.trace_id)
-    observation = langfuse_wrapper.create_observation(trace, name='process_dashboard_creator', input=state.dict())
-    try:
-        result = process_dashboard_creator(state.dict())
-        observation.output = result
-        langfuse_wrapper.log_metrics(observation, latency=0.1, reasoning_quality=0.9, tool_use_accuracy=0.8)
+    with langfuse_wrapper.create_trace(name='dashboard_creator_agent', session_id=state.trace_id) as trace:
+        observation = langfuse_wrapper.create_observation(trace, name='process_dashboard_creator', input=state.dict())
+        try:
+            result = process_dashboard_creator(state.dict())
+            observation.output = result
+            langfuse_wrapper.log_metrics(observation, latency=0.1, reasoning_quality=0.9, tool_use_accuracy=0.8)
 
-        if result.get('next_agent'):
-            next_url = f"http://{result['next_agent']}_agent:8000/process"
-            headers = {'X-Langfuse-Trace-Id': state.trace_id}
-            async with httpx.AsyncClient() as client:
-                response = await client.post(next_url, json=result, headers=headers, timeout=10.0)
-                if response.status_code != 200:
-                    raise HTTPException(status_code=500, detail='Failed to route to next agent')
-            return {'status': 'routed'}
-        else:
-            return {'status': 'completed'}
-    except Exception as e:
-        observation.output = {'error': str(e)}
-        raise HTTPException(status_code=500, detail=str(e))
+            if result.get('next_agent'):
+                next_url = f"http://{result['next_agent']}_agent:8000/process"
+                headers = {'X-Langfuse-Trace-Id': state.trace_id}
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(next_url, json=result, headers=headers, timeout=10.0)
+                    if response.status_code != 200:
+                        raise HTTPException(status_code=500, detail='Failed to route to next agent')
+                return {'status': 'routed'}
+            else:
+                return {'status': 'completed'}
+        except Exception as e:
+            observation.output = {'error': str(e)}
+            raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == '__main__':
     import uvicorn
