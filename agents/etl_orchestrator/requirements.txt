@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+httpx
+chromadb
+langfuse
+pydantic
+psycopg2-binary  # if needed
+falkordb

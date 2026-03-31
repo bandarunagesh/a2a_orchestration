@@ -1,0 +1,292 @@
+x-langfuse-env: &langfuse_env
+  LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+  LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-your-public-key}
+  LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-your-secret-key}
+
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: unify_plus
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  falkordb:
+    image: falkordb/falkordb:latest
+    ports:
+      - "6379:6379"
+    command: ["falkordb-server", "--port", "6379"]
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    environment:
+      CLICKHOUSE_DB: langfuse
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: password
+
+  langfuse:
+    image: langfuse/langfuse:latest
+    environment:
+      <<: *langfuse_env
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:password@postgres:5432/langfuse}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-your-secret-key}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://clickhouse:8123}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-password}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-langfuse}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_started
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    command: serve
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama_init:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      set -e
+      until curl -s http://ollama:11434/api/tags >/dev/null; do
+        echo "waiting for ollama..."
+        sleep 1
+      done
+      ollama --host http://ollama:11434 pull llama3.2
+    volumes:
+      - ollama_data:/root/.ollama
+
+  orchestrator_gateway:
+    build:
+      context: .
+      dockerfile: orchestrator_gateway/Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      <<: *langfuse_env
+      FALKORDB_HOST: falkordb
+    depends_on:
+      - falkordb
+      - langfuse
+
+  startup_agent:
+    build:
+      context: .
+      dockerfile: agents/startup/Dockerfile
+    ports:
+      - "8010:8000"
+    environment:
+      <<: *langfuse_env
+      CHROMADB_HOST: chromadb
+    depends_on:
+      - chromadb
+      - langfuse
+
+  conduct_agent:
+    build:
+      context: .
+      dockerfile: agents/conduct/Dockerfile
+    ports:
+      - "8011:8000"
+    environment:
+      <<: *langfuse_env
+      CHROMADB_HOST: chromadb
+    depends_on:
+      - chromadb
+      - langfuse
+
+  closeout_agent:
+    build:
+      context: .
+      dockerfile: agents/closeout/Dockerfile
+    ports:
+      - "8012:8000"
+    environment:
+      <<: *langfuse_env
+      CHROMADB_HOST: chromadb
+    depends_on:
+      - chromadb
+      - langfuse
+
+  regulatory_agent:
+    build:
+      context: .
+      dockerfile: agents/regulatory/Dockerfile
+    ports:
+      - "8013:8000"
+    environment:
+      <<: *langfuse_env
+      CHROMADB_HOST: chromadb
+    depends_on:
+      - chromadb
+      - langfuse
+
+  analyst_agent:
+    build:
+      context: .
+      dockerfile: agents/analyst/Dockerfile
+    ports:
+      - "8014:8000"
+    environment:
+      <<: *langfuse_env
+      CHROMADB_HOST: chromadb
+    depends_on:
+      - chromadb
+      - langfuse
+
+  insights_agent:
+    build:
+      context: .
+      dockerfile: agents/insights/Dockerfile
+    ports:
+      - "8015:8000"
+    environment:
+      <<: *langfuse_env
+      CHROMADB_HOST: chromadb
+    depends_on:
+      - chromadb
+      - langfuse
+
+  forecasting_agent:
+    build:
+      context: .
+      dockerfile: agents/forecasting/Dockerfile
+    ports:
+      - "8016:8000"
+    environment:
+      <<: *langfuse_env
+      CHROMADB_HOST: chromadb
+    depends_on:
+      - chromadb
+      - langfuse
+
+  report_builder_agent:
+    build:
+      context: .
+      dockerfile: agents/report_builder/Dockerfile
+    ports:
+      - "8017:8000"
+    environment:
+      <<: *langfuse_env
+      CHROMADB_HOST: chromadb
+    depends_on:
+      - chromadb
+      - langfuse
+
+  dashboard_creator_agent:
+    build:
+      context: .
+      dockerfile: agents/dashboard_creator/Dockerfile
+    ports:
+      - "8018:8000"
+    environment:
+      <<: *langfuse_env
+      CHROMADB_HOST: chromadb
+    depends_on:
+      - chromadb
+      - langfuse
+
+  etl_orchestrator_agent:
+    build:
+      context: .
+      dockerfile: agents/etl_orchestrator/Dockerfile
+    ports:
+      - "8019:8000"
+    environment:
+      <<: *langfuse_env
+      CHROMADB_HOST: chromadb
+    depends_on:
+      - chromadb
+      - langfuse
+
+  data_profiler_agent:
+    build:
+      context: .
+      dockerfile: agents/data_profiler/Dockerfile
+    ports:
+      - "8020:8000"
+    environment:
+      <<: *langfuse_env
+      CHROMADB_HOST: chromadb
+    depends_on:
+      - chromadb
+      - langfuse
+
+  notifications_agent:
+    build:
+      context: .
+      dockerfile: agents/notifications/Dockerfile
+    ports:
+      - "8021:8000"
+    environment:
+      <<: *langfuse_env
+      CHROMADB_HOST: chromadb
+    depends_on:
+      - chromadb
+      - langfuse
+
+  mcp_tools:
+    build:
+      context: .
+      dockerfile: mcp_tools/Dockerfile
+    ports:
+      - "8030:8000"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=unify_plus
+    depends_on:
+      - postgres
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "3001:3000"
+    depends_on:
+      - orchestrator_gateway
+
+volumes:
+  postgres_data:
+  chroma_data:
+  ollama_data:
+  clickhouse_data:
